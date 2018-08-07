@@ -1,0 +1,942 @@
+Script started on Fri 01 Dec 2017 07:23:03 PM EST
+bash-4.1$ lsmake cleanls[Kdiff image.c recovered.txt[C[C[C[C[C[C[C[C[C[Cvalgrind StegoExtract half_stego.pgm recovered.txt[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C half.pgm half_stego.pgm image.c[K[C[C[C[C[C[C[C[C[C[Cls[Kmakels[Kuname -avalgrind Stego half.pgm half_stego.pgm image.c[C[C[C[C[C[C[C[C[C[Cuname -a[K
+Linux Zeus-2 2.6.32-696.10.2.el6.centos.plus.x86_64 #1 SMP Tue Sep 12 23:39:53 UTC 2017 x86_64 x86_64 x86_64 GNU/Linux
+bash-4.1$ ls
+cs262.pgm  half.pgm  image.c  image.h  jsaah_typescript_project3_212  Makefile	Stego.c  StegoExtract.c
+bash-4.1$ make
+gcc -c image.c
+gcc -c Stego.c
+gcc -c StegoExtract.c
+gcc -o Stego Stego.o image.o
+gcc -o StegoExtract StegoExtract.o image.o
+bash-4.1$ ls
+cs262.pgm  image.c  image.o			   Makefile  Stego.c	   StegoExtract.c  Stego.o
+half.pgm   image.h  jsaah_typescript_project3_212  Stego     StegoExtract  StegoExtract.o
+bash-4.1$ cat Stego.c
+/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*
+ * Stego.c: A program for manipulating images                           *
+ *++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
+#include <string.h>
+#include "image.h"
+
+#define BYTETOBINARYPATTERN "%d%d%d%d%d%d%d%d\n"
+
+#define BYTETOBINARY(byte) \
+(byte & 0x80 ? 1 : 0), \
+(byte & 0x40 ? 1 : 0), \
+(byte & 0x20 ? 1 : 0), \
+(byte & 0x10 ? 1 : 0), \
+(byte & 0x08 ? 1 : 0), \
+(byte & 0x04 ? 1 : 0), \
+(byte & 0x02 ? 1 : 0), \
+(byte & 0x01 ? 1 : 0)
+
+#define PRINTBIN(x) printf(BYTETOBINARYPATTERN, BYTETOBINARY(x));
+
+#define BYTE 8
+
+void setlsbs(unsigned char *p, unsigned char b0);
+unsigned char concat(unsigned char a, unsigned char b);
+
+int main(int argc, char *argv[])
+{  
+  int i, j, k, cover_bits, bits;
+  struct Buffer b = {NULL, 0, 0};
+  struct Image img = {0, NULL, NULL, NULL, NULL, 0, 0};
+  byte b0;
+   
+  if (argc != 4) 
+    {
+      printf("\n%s <cover_file> <stego_file> <file_to_hide> \n", argv[0]);
+      exit(1);
+    }
+  ReadImage(argv[1],&img);       // read image file into the image buffer img
+                                 // the image is an array of unsigned chars (bytes) of NofR rows
+                                 // NofC columns, it should be accessed using provided macros
+  ReadBinaryFile(argv[3],&b);    // Read binary data
+ 
+
+  // hidden information 
+  // first four bytes is the size of the hidden file
+  // next 4 bytes is the G number (4 bits per digit)
+  if (!GetColor)
+    cover_bits = img.NofC*img.NofR;
+  else 
+    cover_bits = 3*img.NofC*img.NofR;    
+  bits = (8 + b.size)*8;
+  if (bits > cover_bits)
+    {
+      printf("Cover file is not large enough %d (bits) > %d (cover_bits)\n",bits,cover_bits);
+      exit(1);
+    }
+
+  // embed four size bytes for the Buffer's size field
+
+  unsigned char *p = NULL;			 //initialize an array of unsigned chars
+  p = malloc(BYTE * sizeof(unsigned char));
+  if(p == NULL)					 //allocation check
+  {
+	printf("Array not allocated.\n");
+	exit(1);
+  }
+
+  int temp = b.size; //initialize variable to hold b.size while the bits get shifted
+
+  printf("b.size: %d\n", b.size); 
+
+  //embeds 32 bits from b.size into the LSBs of the first 32 bytes of the cover image 
+  for(i=0; i<BYTE/2; i++)
+  {
+	b0 = temp; //casts int to byte
+
+	//puts 8 bytes from the cover image into the array
+	for(j=(i*BYTE); j<((i+1)*BYTE); j++)
+	{
+		p[j%BYTE] = GetGray(j);
+	}
+	
+	setlsbs(p,b0); //embeds LSBs
+	
+	//sets the new bytes back into the cover image
+	for(j=(i*BYTE); j<((i+1)*BYTE); j++)
+	{
+		SetGray(j, p[j%BYTE]);
+	}
+
+	temp >>= BYTE; //shift b.size by 8 bits
+  }
+
+  // embed the eight digits of your G# using 4 bits per digit
+  
+  unsigned char gnum[8] = {0,0,9,6,8,8,2,0};  //initialize Gnumber
+  int count = 0; //initialize counter to print Gnumber
+
+  printf("G#: ");
+  for(count=0; count<8; count++)
+  {
+	printf("%d", gnum[count]);
+  }
+  printf("\n");
+
+  //embeds 32 bits from the Gnumber into the second 32 bytes of the cover image
+  for(i=i; i<BYTE; i++)
+  {
+	//puts 8 bytes from the cover image into the array
+	for(j=(i*BYTE); j<((i+1)*BYTE); j++)
+	{
+		p[j%BYTE] = GetGray(j);
+	}
+
+	//uses 2 numbers to make 8 bits to embed; numbers are chosen based on value of i
+	switch(i)
+	{
+		case 4:
+			b0 = concat(gnum[0], gnum[1]);
+			break;
+		case 5:
+			b0 = concat(gnum[2], gnum[3]);
+			break;
+		case 6:
+			b0 = concat(gnum[4], gnum[5]);
+			break;
+		case 7:
+			b0 = concat(gnum[6], gnum[7]);
+			break;
+	}
+
+	setlsbs(p, b0); //changes the LSBs of the bytes in the array
+
+	//sets the new bytes back into the cover image
+	for(j=(i*BYTE); j<((i+1)*BYTE); j++)
+	{
+		SetGray(j, p[j%BYTE]);
+	}
+  }
+
+  //embed payload into cover image here
+
+  temp = BYTE*8;  //temporary variable to hold current location in the cover image
+
+  for(i=0; i<b.size; i++) //used each byte of the payload individually
+  {
+	for(j=temp; j<((b.size*BYTE)+64); j++) //stores the next 8 bytes of the cover image in the array
+	{
+		p[j%BYTE] = GetGray(j);
+		
+		if(j%BYTE == 7)
+			break;
+	}
+
+	//embeds the next byte in the payload into the next 8 bytes of the cover image
+	b0 = GetByte(i); 
+	setlsbs(p, b0);
+
+	for(j=temp; j<((b.size*BYTE) + 64); j++) //sets the newly embedded bytes back in the cover image
+	{
+		SetGray(j, p[j%BYTE]);
+
+		if(j%BYTE == 7)
+		{
+			j++;
+			break;
+		}
+	}
+
+	temp = j; //updates placeholder in cover image
+  }
+
+  free(p);
+
+  WriteImage(argv[2],img);  // output stego file (cover_file + file_to_hide)
+}
+
+//Sets the Least Significant Bits of each byte in *p with b0
+void setlsbs(unsigned char *p, unsigned char b0)
+{
+	int i = 0; //initializes iterator
+	unsigned char temp; //declares tempory byte
+
+	//shifts b[i] bit all the way to the left, then all the way to the right
+	//if the number is zero, p[i] byte goes through 'bitwise and' operation with 11111110
+	//other wise, p[i] byte goes through 'bitwise or' operation with 00000001 
+	for(i=0; i<BYTE; i++)
+	{
+		temp = b0 << (BYTE - (i+1));
+		temp >>= (BYTE - 1);
+
+		if(temp == 0)
+			p[i] &= 0xFE;
+		else
+			p[i] |= 0x01;
+	}
+}
+
+//Concatanates the 4 LSBs of each of the given unsigned chars
+unsigned char concat(unsigned char a, unsigned char b)
+{
+	a <<= BYTE/2;
+	return a | b;
+}
+bash-4.1$ cat Stegoext[K[K[KExtract.c
+/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*
+ * StegoExtract.c: A program for manipulating images                           *
+ *++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
+#include <string.h>
+#include "image.h"
+
+#define BYTETOBINARYPATTERN "%d%d%d%d%d%d%d%d\n"
+
+#define BYTETOBINARY(byte) \
+(byte & 0x80 ? 1 : 0), \
+(byte & 0x40 ? 1 : 0), \
+(byte & 0x20 ? 1 : 0), \
+(byte & 0x10 ? 1 : 0), \
+(byte & 0x08 ? 1 : 0), \
+(byte & 0x04 ? 1 : 0), \
+(byte & 0x02 ? 1 : 0), \
+(byte & 0x01 ? 1 : 0)
+
+#define PRINTBIN( x ) printf(BYTETOBINARYPATTERN, BYTETOBINARY(x));
+
+#define BYTE 8
+
+unsigned char getlsbs(unsigned char *p);
+
+int main(int argc, char *argv[])
+{  
+  int i, j, k, cover_bits, bits;
+  struct Buffer b = {NULL, 0, 0};
+  struct Image img = {0, NULL, NULL, NULL, NULL, 0, 0};
+  byte b0;
+   
+  if (argc != 3) 
+    {
+      printf("\n%s <stego_file> <file_to_extract> \n", argv[0]);
+      exit(1);
+    }
+  ReadImage(argv[1],&img);       // read image file into the image buffer img
+                                 // the image is an array of unsigned chars (bytes) of NofR rows
+                                 // NofC columns, it should be accessed using provided macros
+
+  // hidden information 
+  // first four bytes is the size of the hidden file
+  // next 4 bytes is the G number (4 bits per digit)
+  if (!GetColor)
+    cover_bits = img.NofC*img.NofR;
+  else 
+    cover_bits = 3*img.NofC*img.NofR;    
+
+  b.size = 0;
+  // extract four size bytes for the Buffer's size field
+  // Set this to b.size
+
+  unsigned char *p = NULL; //initializes an arrray of unsigned chars
+  p = malloc(BYTE * sizeof(unsigned char));
+  if(p == NULL)    //allocation check
+  {
+	printf("Array not allocated.\n");
+	exit(1);
+  }
+
+  int temp = 0; //initializes temporary variable for bit shifting
+
+  //iterates over the first 32 bytes to extract their LSBs
+  for(i=0; i<BYTE/2; i++)
+  {
+	for(j=(i*BYTE); j<((i+1)*BYTE); j++) //stores next 8 bytes from image in array
+	{
+		p[j%BYTE] = GetGray(j);
+	}
+
+	//Extracts LSBs from 8 bytes in array
+	b0 = getlsbs(p);
+	temp = b0;
+
+	//assigns b0 to b.size
+	temp <<= i*BYTE;
+	b.size |= temp;
+  }
+
+  printf("b.size: %d\n", b.size);
+
+  b.data = malloc(b.size); // Allocates room for the output data file
+  if(b.data == NULL)
+  {
+	printf("b.data not allocated.\n");
+	exit(1);
+  }
+ 
+  // extract the eight digits of your G# using 4 bits per digit
+
+  unsigned char gnum[8] = {0,0,0,0,0,0,0,0}; //initializes Gnumber
+  unsigned char shift = 0; //initialize temporary variable for bit shifting
+  int count = 0; //initializes counter
+
+  printf("G#: ");
+
+  //iterates over the second 32 bytes to extract their LSBs
+  for(i=i; i<BYTE; i++)
+  {
+	for(j=(i*BYTE); j<((i+1)*BYTE); j++) //stores next 8 bytes from image in array
+	{
+		p[j%BYTE] = GetGray(j);
+	}
+
+	b0 = getlsbs(p); //extracts LSBs from 8 bytes in array
+	shift = b0;
+
+	//uses first 4 bits in Gnumber
+	b0 >>= BYTE/2;
+	gnum[count] = b0;
+	printf("%d", gnum[count]);
+	count++;
+
+	//uses second 4 bits for Gnumber
+	shift <<= BYTE/2;
+	shift >>= BYTE/2;
+	gnum[count] = shift;
+	printf("%d", gnum[count]);
+	count++;
+  }
+  
+  printf("\n");
+
+  // here you extract information from the image one byte at the time
+  // note that you should extract only the least significant bits of the image
+  
+  temp = BYTE*8; //temporary variable to hold current location in the cover image
+  for (i=0; i<b.size; i++) //iterates one byte at a time to create the recovery file
+  {
+	for(j=temp; j<((b.size*BYTE)+64); j++) //stores the next 8 bytes of the cover image in the array
+	{
+		p[j%BYTE] = GetGray(j);
+
+		if(j%BYTE == 7)
+			break;
+	}
+
+	//Extracts LSB from each byte in the array and sets it in the recovery file
+	b0 = getlsbs(p);
+	SetByte(i, b0);
+
+	//updates location in cover image
+	j++;
+	temp = j;
+  }
+
+  WriteBinaryFile(argv[2],b);  // output payload file
+
+  free(p);
+  free(b.data);
+}
+
+//Extracts embedded bits and returns the data those bits create
+unsigned char getlsbs(unsigned char *p)
+{
+	int i = 0; //initialize iterator
+	unsigned char b0 = 0x0; //initialize return value
+
+	//iterates over the given array of unsigned chars
+	//if the unsigned char is even, perform 'bitwise and' operation on return value with 01111111
+	//otherwise, perform 'bitwise or' operation on return value with 10000000
+	//then shifts the return value to the left by 1.
+	for(i=0; i<BYTE; i++)
+	{
+		if(p[i]%2 == 0)
+			b0 &= 0x7F;
+		else
+			b0 |= 0x80;
+
+		if((i+1) != BYTE)
+			b0 >>= 1;
+	}
+
+	return b0;
+}
+bash-4.1$ cat StegoExtract.c.c[Kls[Kmakels[Kuname -als[Kmake cleanls[Kdiff image.c recovered.txt[C[C[C[C[C[C[C[C[C[Cvalgrind StegoExtract half_stego.pgm recovered.txt[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C half.pgm half_stego.pgm image.c[K[C[C[C[C
+==1244== Memcheck, a memory error detector
+==1244== Copyright (C) 2002-2015, and GNU GPL'd, by Julian Seward et al.
+==1244== Using Valgrind-3.12.0 and LibVEX; rerun with -h for copyright info
+==1244== Command: Stego half.pgm half_stego.pgm image.c
+==1244== 
+
+Reading input file 'half.pgm'
+
+Reading binary file 'image.c'
+b.size: 6826
+G#: 00968820
+
+Writing file 'half_stego.pgm'
+==1244== 
+==1244== HEAP SUMMARY:
+==1244==     in use at exit: 139,264 bytes in 2 blocks
+==1244==   total heap usage: 10 allocs, 8 frees, 149,680 bytes allocated
+==1244== 
+==1244== LEAK SUMMARY:
+==1244==    definitely lost: 139,264 bytes in 2 blocks
+==1244==    indirectly lost: 0 bytes in 0 blocks
+==1244==      possibly lost: 0 bytes in 0 blocks
+==1244==    still reachable: 0 bytes in 0 blocks
+==1244==         suppressed: 0 bytes in 0 blocks
+==1244== Rerun with --leak-check=full to see details of leaked memory
+==1244== 
+==1244== For counts of detected and suppressed errors, rerun with: -v
+==1244== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 4 from 4)
+bash-4.1$ valgrind Stego half.pgm half_stego.pgm image.c[C[C[C[C[C[C[C[C[C[Ccat StegoExtract.c[K.c[Kls[Kmakels[Kuname -als[Kmake cleanls[Kdiff image.c recovered.txt[C[C[C[C[C[C[C[C[C[Cvalgrind StegoExtract half_stego.pgm recovered.txt
+==1259== Memcheck, a memory error detector
+==1259== Copyright (C) 2002-2015, and GNU GPL'd, by Julian Seward et al.
+==1259== Using Valgrind-3.12.0 and LibVEX; rerun with -h for copyright info
+==1259== Command: StegoExtract half_stego.pgm recovered.txt
+==1259== 
+
+Reading input file 'half_stego.pgm'
+b.size: 6826
+G#: 00968820
+
+Writing file 'recovered.txt'
+==1259== 
+==1259== HEAP SUMMARY:
+==1259==     in use at exit: 131,072 bytes in 1 blocks
+==1259==   total heap usage: 6 allocs, 5 frees, 139,298 bytes allocated
+==1259== 
+==1259== LEAK SUMMARY:
+==1259==    definitely lost: 131,072 bytes in 1 blocks
+==1259==    indirectly lost: 0 bytes in 0 blocks
+==1259==      possibly lost: 0 bytes in 0 blocks
+==1259==    still reachable: 0 bytes in 0 blocks
+==1259==         suppressed: 0 bytes in 0 blocks
+==1259== Rerun with --leak-check=full to see details of leaked memory
+==1259== 
+==1259== For counts of detected and suppressed errors, rerun with: -v
+==1259== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 4 from 4)
+bash-4.1$ cat image.c
+/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*
+ * image.c: A program for manipulating images                           *
+ * Author: Zoran Duric, 10-7-2010.                                      *
+ *++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include "image.h"
+
+void PGMtoPPM(struct Image *Img)
+{
+  int i;
+  if (Img->iscolor) return;
+
+  Img->iscolor = 1;
+  if (Img->red == NULL) Img->red = (byte *)malloc(sizeof(byte)*Img->NofC*Img->NofR);
+  if (Img->green == NULL) Img->green = (byte *)malloc(sizeof(byte)*Img->NofC*Img->NofR);
+  if (Img->blue == NULL) Img->blue = (byte *)malloc(sizeof(byte)*Img->NofC*Img->NofR);
+
+  for (i=0; i<Img->NofR*Img->NofC; i++)
+    {
+      Img->red[i] = Img->gray[i];
+      Img->green[i] = Img->gray[i]; 
+      Img->blue[i] = Img->gray[i];
+    }
+  free(Img->gray);
+}
+
+// Read PPM & PGM files (P2, P3, P5, P6)
+void ReadImage(char *name, struct Image *Img)
+{
+  int i,j,pixel,k;
+  FILE *fp;
+  char s[256];
+  int filetype, nlevels;
+  byte *in;
+
+  printf("\nReading input file '%s'\n",name);
+  if ((fp = fopen(name, "rb")) == NULL) {
+    fprintf(stderr,"Can't open input file %s\n",name);
+    exit(1);
+  } 
+  label1 : 
+    if (fgets(s, 80, fp)==NULL)
+      {
+	fprintf(stderr,"<EOF> character found in input file %s\n", name);
+	exit(1);
+      }
+    
+  if (strcmp("P2\n",s)==0) filetype = 2;
+  else if (strcmp("P3\n",s)==0) filetype = 3;
+  else if (strcmp("P5\n",s)==0) filetype = 5;
+  else if (strcmp("P6\n",s)==0) filetype = 6;
+  else {
+    if (s[0] == '#') goto label1;
+    fprintf(stderr,"Input file %s is of wrong type %s\n",name,s);
+    exit(1);
+  }
+
+ label2:
+  if (fgets(s, 80, fp)==NULL) {
+    fprintf(stderr,"Size line does not exist in input file %s\n", name);
+    exit(1);
+  }
+  if (s[0] == '#') goto label2;
+  sscanf(s,"%d %d",&(Img->NofC),&(Img->NofR));
+
+ label3:
+  if (fgets(s, 80, fp)==NULL) {
+    fprintf(stderr,"<EOF> character found in input file %s\n", name);
+    exit(1);
+  }
+  if (s[0] == '#') goto label3;
+  sscanf(s,"%d",&nlevels);
+
+  switch (filetype) { // read pixels
+  case 2:  // P2 - ascii file, gray level image
+    Img->iscolor = 0;
+    if (Img->gray == NULL) Img->gray = (byte *)malloc(sizeof(byte)*Img->NofC*Img->NofR);
+    k = 0;
+    for (i=0; i<Img->NofR; i++) for (j=0; j<Img->NofC; j++) {
+      fscanf(fp,"%d",&pixel);
+      Img->gray[k++] = pixel;
+    }
+    break;
+  case 3:  // P3 - ascii file, color image
+    Img->iscolor = 1;
+    if (Img->red == NULL) Img->red = (byte *)malloc(sizeof(byte)*Img->NofC*Img->NofR);
+    if (Img->green == NULL) Img->green = (byte *)malloc(sizeof(byte)*Img->NofC*Img->NofR);
+    if (Img->blue == NULL) Img->blue = (byte *)malloc(sizeof(byte)*Img->NofC*Img->NofR);
+    k = 0;
+    for (i=0; i<Img->NofR; i++) for (j=0; j<Img->NofC; j++) {
+      fscanf(fp,"%d",&pixel);      Img->red[k] = pixel;
+      fscanf(fp,"%d",&pixel);      Img->green[k] = pixel;
+      fscanf(fp,"%d",&pixel);      Img->blue[k++] = pixel;
+    }
+    break;
+  case 5:  // P5 - raw file, gray level image
+    Img->iscolor = 0;
+    if (Img->gray == NULL) Img->gray = (byte *)malloc(sizeof(byte)*Img->NofC*Img->NofR);
+    k = 0;
+    in = (byte *)malloc(sizeof(byte)*Img->NofC);
+    for (i=0; i<Img->NofR; i++) {
+      j = fread((void *)in,sizeof(byte),Img->NofC,fp);
+      if (j < Img->NofC) 
+       {  fprintf(stderr,
+              "Error: input file %s contains only %1d objects (< %1d)\n",
+               name,i*Img->NofC+j,Img->NofC*Img->NofR);
+          exit(1);
+       }
+      for (j=0; j<Img->NofC; j++) Img->gray[k++] = in[j];
+    }
+    free(in);
+    break;
+  case 6:   // P6 - raw file, color image
+    Img->iscolor = 1;
+    if (Img->red == NULL) Img->red = (byte *)malloc(sizeof(byte)*Img->NofC*Img->NofR);
+    if (Img->green == NULL) Img->green = (byte *)malloc(sizeof(byte)*Img->NofC*Img->NofR);
+    if (Img->blue == NULL) Img->blue = (byte *)malloc(sizeof(byte)*Img->NofC*Img->NofR);
+    k = 0;
+    in = (byte *)malloc(sizeof(byte)*Img->NofC*3);;
+    for (i=0; i<Img->NofR; i++) {
+      j = fread((void *)in,sizeof(byte),Img->NofC*3,fp);
+      if (j < (Img->NofC*3)) 
+       {  fprintf(stderr,
+              "Error: input file %s contains only %1d objects (< %1d)\n",
+               name,i*Img->NofC+(j+1)/3,Img->NofC*Img->NofR);
+          exit(1);
+       }
+      for (j=0; j<Img->NofC; j++) {
+	Img->red[k] = in[3*j];
+	Img->green[k] = in[3*j+1];
+	Img->blue[k++] = in[3*j+2];
+      }
+    }
+    free(in);
+    break;
+  otherwise: break;
+  }
+
+  fclose(fp);
+}
+
+// Read binary file
+void ReadBinaryFile(char *name, struct Buffer *b)
+{
+  int i,j,k;
+  FILE *fp;
+  byte *in, *aux;
+
+  printf("\nReading binary file '%s'\n",name);
+  if ((fp = fopen(name, "rb")) == NULL) {
+    fprintf(stderr,"Can't open input file %s\n",name);
+    exit(1);
+  } 
+
+  // make space for data
+  b->data = (byte *)malloc(sizeof(byte)*MIN_BUFFER_SIZE);
+  b->size = 0;
+  b->max_size = MIN_BUFFER_SIZE;
+
+  in = (byte *)malloc(sizeof(byte)*MIN_BUFFER_SIZE);
+  while ((j = fread((void *)in,sizeof(byte),MIN_BUFFER_SIZE,fp)) > 0)
+    {
+      if ((j + b->size) > b->max_size)
+	{
+	  aux = (byte *)malloc(sizeof(byte)*b->max_size*2);
+	  b->max_size *=2;
+	  for (i=0; i<b->size; i++) aux[i] = b->data[i];
+	  free(b->data);
+	  b->data = aux;
+	}
+      for (i=0; i<j; i++) b->data[b->size+i] = in[i];
+      b->size += j;
+      if (j < MIN_BUFFER_SIZE) break;
+    }
+  free(in);
+  fclose(fp);
+}
+
+// Write gray or color images
+void WriteImage(char *file, struct Image Img)
+{
+  int i, j, k;
+  FILE *fo;
+  byte *out;
+
+  printf("\nWriting file '%s'\n",file);
+
+  if ((fo = fopen(file, "wb")) == NULL) {
+    fprintf(stderr,"Can't create output file \'%s\'\n",file);
+    exit(1);
+  } 
+  if (!Img.iscolor) {  // write P5 - raw, gray image
+    out =  (byte *)malloc(sizeof(byte)*Img.NofC);;
+    fprintf(fo,"P5\n %3d %3d\n 255\n",Img.NofC,Img.NofR);  
+    for (i=0; i<Img.NofR; i++) {
+      k = Img.NofC*i;
+      for (j=0; j<Img.NofC; j++) out[j] = Img.gray[k++];
+      fwrite(out, sizeof(byte), Img.NofC, fo);
+    }
+    free(out);
+  } // !iscolor
+  else {  // P6 - raw, color image
+    out =  (byte *)malloc(sizeof(byte)*Img.NofC*3);;
+    fprintf(fo,"P6\n %3d %3d\n 255\n",Img.NofC,Img.NofR);  
+    for (i=0; i<Img.NofR; i++) {
+      k = Img.NofC*i;
+      for (j=0; j<Img.NofC; j++) {
+	out[3*j] = Img.red[k];
+	out[3*j+1] = Img.green[k];
+	out[3*j+2] = Img.blue[k++];
+      }
+      fwrite(out, sizeof(byte), Img.NofC*3, fo);
+    }
+    free(out);
+  } // iscolor
+  fclose(fo);
+}
+
+
+// Write gray or color images
+void WriteBinaryFile(char *name, struct Buffer b)
+{
+  FILE *fo;
+
+  printf("\nWriting file '%s'\n",name);
+
+  if ((fo = fopen(name, "wb")) == NULL) {
+    fprintf(stderr,"Can't create output file \'%s\'\n",name);
+    exit(1);
+  } 
+
+  fwrite(b.data, sizeof(byte), b.size, fo);
+  fclose(fo);
+}
+
+
+bash-4.1$ cat recovered.txt
+/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*
+ * image.c: A program for manipulating images                           *
+ * Author: Zoran Duric, 10-7-2010.                                      *
+ *++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include "image.h"
+
+void PGMtoPPM(struct Image *Img)
+{
+  int i;
+  if (Img->iscolor) return;
+
+  Img->iscolor = 1;
+  if (Img->red == NULL) Img->red = (byte *)malloc(sizeof(byte)*Img->NofC*Img->NofR);
+  if (Img->green == NULL) Img->green = (byte *)malloc(sizeof(byte)*Img->NofC*Img->NofR);
+  if (Img->blue == NULL) Img->blue = (byte *)malloc(sizeof(byte)*Img->NofC*Img->NofR);
+
+  for (i=0; i<Img->NofR*Img->NofC; i++)
+    {
+      Img->red[i] = Img->gray[i];
+      Img->green[i] = Img->gray[i]; 
+      Img->blue[i] = Img->gray[i];
+    }
+  free(Img->gray);
+}
+
+// Read PPM & PGM files (P2, P3, P5, P6)
+void ReadImage(char *name, struct Image *Img)
+{
+  int i,j,pixel,k;
+  FILE *fp;
+  char s[256];
+  int filetype, nlevels;
+  byte *in;
+
+  printf("\nReading input file '%s'\n",name);
+  if ((fp = fopen(name, "rb")) == NULL) {
+    fprintf(stderr,"Can't open input file %s\n",name);
+    exit(1);
+  } 
+  label1 : 
+    if (fgets(s, 80, fp)==NULL)
+      {
+	fprintf(stderr,"<EOF> character found in input file %s\n", name);
+	exit(1);
+      }
+    
+  if (strcmp("P2\n",s)==0) filetype = 2;
+  else if (strcmp("P3\n",s)==0) filetype = 3;
+  else if (strcmp("P5\n",s)==0) filetype = 5;
+  else if (strcmp("P6\n",s)==0) filetype = 6;
+  else {
+    if (s[0] == '#') goto label1;
+    fprintf(stderr,"Input file %s is of wrong type %s\n",name,s);
+    exit(1);
+  }
+
+ label2:
+  if (fgets(s, 80, fp)==NULL) {
+    fprintf(stderr,"Size line does not exist in input file %s\n", name);
+    exit(1);
+  }
+  if (s[0] == '#') goto label2;
+  sscanf(s,"%d %d",&(Img->NofC),&(Img->NofR));
+
+ label3:
+  if (fgets(s, 80, fp)==NULL) {
+    fprintf(stderr,"<EOF> character found in input file %s\n", name);
+    exit(1);
+  }
+  if (s[0] == '#') goto label3;
+  sscanf(s,"%d",&nlevels);
+
+  switch (filetype) { // read pixels
+  case 2:  // P2 - ascii file, gray level image
+    Img->iscolor = 0;
+    if (Img->gray == NULL) Img->gray = (byte *)malloc(sizeof(byte)*Img->NofC*Img->NofR);
+    k = 0;
+    for (i=0; i<Img->NofR; i++) for (j=0; j<Img->NofC; j++) {
+      fscanf(fp,"%d",&pixel);
+      Img->gray[k++] = pixel;
+    }
+    break;
+  case 3:  // P3 - ascii file, color image
+    Img->iscolor = 1;
+    if (Img->red == NULL) Img->red = (byte *)malloc(sizeof(byte)*Img->NofC*Img->NofR);
+    if (Img->green == NULL) Img->green = (byte *)malloc(sizeof(byte)*Img->NofC*Img->NofR);
+    if (Img->blue == NULL) Img->blue = (byte *)malloc(sizeof(byte)*Img->NofC*Img->NofR);
+    k = 0;
+    for (i=0; i<Img->NofR; i++) for (j=0; j<Img->NofC; j++) {
+      fscanf(fp,"%d",&pixel);      Img->red[k] = pixel;
+      fscanf(fp,"%d",&pixel);      Img->green[k] = pixel;
+      fscanf(fp,"%d",&pixel);      Img->blue[k++] = pixel;
+    }
+    break;
+  case 5:  // P5 - raw file, gray level image
+    Img->iscolor = 0;
+    if (Img->gray == NULL) Img->gray = (byte *)malloc(sizeof(byte)*Img->NofC*Img->NofR);
+    k = 0;
+    in = (byte *)malloc(sizeof(byte)*Img->NofC);
+    for (i=0; i<Img->NofR; i++) {
+      j = fread((void *)in,sizeof(byte),Img->NofC,fp);
+      if (j < Img->NofC) 
+       {  fprintf(stderr,
+              "Error: input file %s contains only %1d objects (< %1d)\n",
+               name,i*Img->NofC+j,Img->NofC*Img->NofR);
+          exit(1);
+       }
+      for (j=0; j<Img->NofC; j++) Img->gray[k++] = in[j];
+    }
+    free(in);
+    break;
+  case 6:   // P6 - raw file, color image
+    Img->iscolor = 1;
+    if (Img->red == NULL) Img->red = (byte *)malloc(sizeof(byte)*Img->NofC*Img->NofR);
+    if (Img->green == NULL) Img->green = (byte *)malloc(sizeof(byte)*Img->NofC*Img->NofR);
+    if (Img->blue == NULL) Img->blue = (byte *)malloc(sizeof(byte)*Img->NofC*Img->NofR);
+    k = 0;
+    in = (byte *)malloc(sizeof(byte)*Img->NofC*3);;
+    for (i=0; i<Img->NofR; i++) {
+      j = fread((void *)in,sizeof(byte),Img->NofC*3,fp);
+      if (j < (Img->NofC*3)) 
+       {  fprintf(stderr,
+              "Error: input file %s contains only %1d objects (< %1d)\n",
+               name,i*Img->NofC+(j+1)/3,Img->NofC*Img->NofR);
+          exit(1);
+       }
+      for (j=0; j<Img->NofC; j++) {
+	Img->red[k] = in[3*j];
+	Img->green[k] = in[3*j+1];
+	Img->blue[k++] = in[3*j+2];
+      }
+    }
+    free(in);
+    break;
+  otherwise: break;
+  }
+
+  fclose(fp);
+}
+
+// Read binary file
+void ReadBinaryFile(char *name, struct Buffer *b)
+{
+  int i,j,k;
+  FILE *fp;
+  byte *in, *aux;
+
+  printf("\nReading binary file '%s'\n",name);
+  if ((fp = fopen(name, "rb")) == NULL) {
+    fprintf(stderr,"Can't open input file %s\n",name);
+    exit(1);
+  } 
+
+  // make space for data
+  b->data = (byte *)malloc(sizeof(byte)*MIN_BUFFER_SIZE);
+  b->size = 0;
+  b->max_size = MIN_BUFFER_SIZE;
+
+  in = (byte *)malloc(sizeof(byte)*MIN_BUFFER_SIZE);
+  while ((j = fread((void *)in,sizeof(byte),MIN_BUFFER_SIZE,fp)) > 0)
+    {
+      if ((j + b->size) > b->max_size)
+	{
+	  aux = (byte *)malloc(sizeof(byte)*b->max_size*2);
+	  b->max_size *=2;
+	  for (i=0; i<b->size; i++) aux[i] = b->data[i];
+	  free(b->data);
+	  b->data = aux;
+	}
+      for (i=0; i<j; i++) b->data[b->size+i] = in[i];
+      b->size += j;
+      if (j < MIN_BUFFER_SIZE) break;
+    }
+  free(in);
+  fclose(fp);
+}
+
+// Write gray or color images
+void WriteImage(char *file, struct Image Img)
+{
+  int i, j, k;
+  FILE *fo;
+  byte *out;
+
+  printf("\nWriting file '%s'\n",file);
+
+  if ((fo = fopen(file, "wb")) == NULL) {
+    fprintf(stderr,"Can't create output file \'%s\'\n",file);
+    exit(1);
+  } 
+  if (!Img.iscolor) {  // write P5 - raw, gray image
+    out =  (byte *)malloc(sizeof(byte)*Img.NofC);;
+    fprintf(fo,"P5\n %3d %3d\n 255\n",Img.NofC,Img.NofR);  
+    for (i=0; i<Img.NofR; i++) {
+      k = Img.NofC*i;
+      for (j=0; j<Img.NofC; j++) out[j] = Img.gray[k++];
+      fwrite(out, sizeof(byte), Img.NofC, fo);
+    }
+    free(out);
+  } // !iscolor
+  else {  // P6 - raw, color image
+    out =  (byte *)malloc(sizeof(byte)*Img.NofC*3);;
+    fprintf(fo,"P6\n %3d %3d\n 255\n",Img.NofC,Img.NofR);  
+    for (i=0; i<Img.NofR; i++) {
+      k = Img.NofC*i;
+      for (j=0; j<Img.NofC; j++) {
+	out[3*j] = Img.red[k];
+	out[3*j+1] = Img.green[k];
+	out[3*j+2] = Img.blue[k++];
+      }
+      fwrite(out, sizeof(byte), Img.NofC*3, fo);
+    }
+    free(out);
+  } // iscolor
+  fclose(fo);
+}
+
+
+// Write gray or color images
+void WriteBinaryFile(char *name, struct Buffer b)
+{
+  FILE *fo;
+
+  printf("\nWriting file '%s'\n",name);
+
+  if ((fo = fopen(name, "wb")) == NULL) {
+    fprintf(stderr,"Can't create output file \'%s\'\n",name);
+    exit(1);
+  } 
+
+  fwrite(b.data, sizeof(byte), b.size, fo);
+  fclose(fo);
+}
+
+
+bash-4.1$ d[Kdiff image.c recovered.txt
+bash-4.1$ make lc[K[Kclean
+rm -f image.o Stego.o StegoExtract.o Stego StegoExtract
+bash-4.1$ ls
+cs262.pgm  half_stego.pgm  image.h			  Makefile	 Stego.c
+half.pgm   image.c	   jsaah_typescript_project3_212  recovered.txt  StegoExtract.c
+bash-4.1$ exit
+
+Script done on Fri 01 Dec 2017 07:25:04 PM EST
